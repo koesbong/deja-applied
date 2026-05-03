@@ -169,6 +169,8 @@ const ROLE_KEYWORDS = [
 
 function isLikelyRole(str) {
   if (!str || str.length < 3 || str.length > 100) return false;
+  // Reject LinkedIn boilerplate phrases
+  if (/^(your job alert|new jobs|jobs in|new job match|match your)/i.test(str)) return false;
   const lower = str.toLowerCase();
   return ROLE_KEYWORDS.some(k => lower.includes(k)) || /^[A-Z][a-z]/.test(str);
 }
@@ -177,7 +179,7 @@ function isLikelyCompany(str) {
   if (!str || str.length < 2 || str.length > 80) return false;
   if (/^https?:\/\//.test(str)) return false;
   if (/^\d/.test(str)) return false;
-  if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy)/i.test(str)) return false;
+  if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy|new jobs|your job|jobs in|match your|new job)/i.test(str)) return false;
   return /^[A-Z]/.test(str);
 }
 
