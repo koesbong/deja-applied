@@ -254,7 +254,7 @@ function showMultiResultsOverlay(jobs, hits, error) {
       <ul class="da-results-list">
         ${results.map(r => `
           <li class="da-result-item">
-            <div class="da-result-subject">${escHtml(r.subject)}</div>
+            <a class="da-result-subject" href="https://mail.google.com/mail/u/0/#all/${r.id}" target="_blank" rel="noopener noreferrer">${escHtml(r.subject)}</a>
             <div class="da-result-meta">
               <span class="da-result-from">${escHtml(truncate(r.from, 40))}</span>
               <span class="da-result-date">${escHtml(r.date)}</span>
