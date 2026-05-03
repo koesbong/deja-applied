@@ -169,7 +169,6 @@ const ROLE_KEYWORDS = [
 
 function isLikelyRole(str) {
   if (!str || str.length < 3 || str.length > 100) return false;
-  // Reject LinkedIn boilerplate phrases
   if (/^(your job alert|new jobs|jobs in|new job match|match your)/i.test(str)) return false;
   const lower = str.toLowerCase();
   return ROLE_KEYWORDS.some(k => lower.includes(k)) || /^[A-Z][a-z]/.test(str);
@@ -273,4 +272,34 @@ function triggerBackgroundCheckAll(jobs) {
   if (!jobs.length) return;
 
   // Use first job to verify auth, then check all in parallel
-  chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company: jobs[0].company, role: jobs[0].role },
+  chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company: jobs[0].company, role: jobs[0].role }, (firstResp) => {
+    if (chrome.runtime.lastError) { showMultiResultsOverlay(jobs, [], "Extension error. Try reloading Gmail."); return; }
+    if (!firstResp?.success) { showMultiResultsOverlay(jobs, [], firstResp?.error || "Unknown error"); return; }
+    if (firstResp.needsAuth) { showMultiResultsOverlay(jobs, [], "needsAuth"); return; }
+
+    const remaining = jobs.slice(1).map(j =>
+      new Promise(resolve => {
+        chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company: j.company, role: j.role }, (resp) => {
+          resolve({ job: j, results: resp?.results || [] });
+        });
+      })
+    );
+
+    Promise.all(remaining).then(restResults => {
+      const allHits = [
+        { job: jobs[0], results: firstResp.results || [] },
+        ...restResults
+      ].filter(r => r.results.length > 0);
+
+      showMultiResultsOverlay(jobs, allHits, null);
+    });
+  });
+}
+
+function escHtml(str) {
+  return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function truncate(str, max) {
+  if (!str || str.length <= max) return str;
+  return str.substring(0, max) + "…";
+}

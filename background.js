@@ -39,21 +39,17 @@ async function searchApplicationEmails(company, role, token) {
 
   const queries = [];
   if (companyClean) {
-  // Broad subject match — company name + any application-related word
-  queries.push(
-    `subject:("${companyClean}") subject:(application OR applied OR applying OR "thank you" OR "thanks for" OR "we received" OR "you applied" OR "your application")`
-  );
-  // Body keyword match — catches "Thanks for applying to Treatwell" (Workable, Greenhouse, etc.)
-  queries.push(
-    `("${companyClean}") ("thank you for applying" OR "thanks for applying" OR "application received" OR "we received your application" OR "successfully applied" OR "your application has been" OR "application submitted" OR "you applied" OR "we got your application")`
-  );
-  // Fallback: just company name + role in subject (catches sparse ack formats)
-  if (roleClean) {
     queries.push(
-      `subject:("${companyClean}") subject:("${roleClean.substring(0, 40)}")`
+      `subject:("${companyClean}") subject:(application OR applied OR applying OR "thank you" OR "thanks for" OR "we received" OR "you applied" OR "your application")`
+    );
+    queries.push(
+      `("${companyClean}") ("thank you for applying" OR "thanks for applying" OR "application received" OR "we received your application" OR "successfully applied" OR "your application has been" OR "application submitted" OR "you applied" OR "we got your application")`
+    );
+    if (roleClean) {
+      queries.push(
+        `subject:("${companyClean}") subject:("${roleClean.substring(0, 40)}")`
       );
     }
-    // Last resort: company name anywhere, no keyword filter — catches edge cases
     queries.push(`subject:("${companyClean}") (applying OR application OR applied)`);
   }
 
