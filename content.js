@@ -71,7 +71,6 @@ function extractEmailText(container) {
 function parseLinkedInJobEmail(text) {
   if (!text || text.length < 20) return null;
 
-  // Check if this looks like a LinkedIn email
   const isLinkedIn = /linkedin/i.test(text.substring(0, 800));
   const fromEl = document.querySelector('.gD, [email*="linkedin"]');
   const fromEmail = fromEl?.getAttribute("email") || fromEl?.innerText || "";
@@ -83,11 +82,52 @@ function parseLinkedInJobEmail(text) {
     /job.*alert/i.test(subject) ||
     /jobs.*for.*you/i.test(subject) ||
     /recommended.*job/i.test(subject) ||
-    /new.*job.*match/i.test(subject);
+    /new.*job.*match/i.test(subject) ||
+    /jobs similar to/i.test(subject);
 
   if (!isLinkedIn && !isLinkedInSender && !isLinkedInSubject) return null;
 
-  // Strategy 1: "Role at Company" in body
+  // Strategy 1: Digest/list emails — parse ALL visible jobs first
+  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+  const allJobs = [];
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i];
+    const nextLine = lines[i + 1];
+
+    if (!isLikelyRole(line)) continue;
+
+    // Format: "Company · Location"
+    const companyLocationMatch = nextLine.match(/^([A-Z][^·\n]{2,80}?)\s*·\s*(.+)$/);
+    if (companyLocationMatch) {
+      const company = cleanToken(companyLocationMatch[1]);
+      if (isLikelyCompany(company)) {
+        allJobs.push({ role: cleanToken(line), company });
+        continue;
+      }
+    }
+
+    // Format: role / company / location on separate lines
+    if (isLikelyCompany(nextLine)) {
+      const afterCompany = lines[i + 2] || "";
+      if (isLikelyLocation(afterCompany) || /\d+ (day|hour|week|month)s? ago/i.test(afterCompany)) {
+        allJobs.push({ role: cleanToken(line), company: cleanToken(nextLine) });
+        continue;
+      }
+    }
+  }
+
+  if (allJobs.length > 0) {
+    const seen = new Set();
+    return allJobs.filter(job => {
+      const key = `${job.role}__${job.company}`.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  // Strategy 2: "Role at Company" in body
   let match = text.match(/^(.{2,80}?)\s+at\s+([A-Z][^\n]{2,60}?)(?:\s*[\n\r·•|,]|$)/m);
   if (match) {
     const role = cleanToken(match[1]);
@@ -95,8 +135,7 @@ function parseLinkedInJobEmail(text) {
     if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
   }
 
-  // Strategy 2: Subject line — works with or without a trailing separator
-  // e.g. "Head of Engineering at Treatwell" (no dash) or "SWE at Acme – LinkedIn"
+  // Strategy 3: Subject line fallback only
   for (const pat of [
     /^(.{2,80}?)\s+at\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/,
     /^(.{2,80}?)\s+@\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/
@@ -108,35 +147,6 @@ function parseLinkedInJobEmail(text) {
       if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
     }
   }
-
-  // Strategy 3: Digest card format — handles both:
-  //   "Role\nCompany\nLocation"       (company and location on separate lines)
-  //   "Role\nCompany · Location ..."  (company and location joined with ·)
-  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
-  const allJobs = [];
-  for (let i = 0; i < lines.length - 1; i++) {
-    const line = lines[i];
-    const nextLine = lines[i + 1];
-
-    // "Company · Location" joined on one line
-    const companyLocationMatch = nextLine.match(/^([A-Z][^·\n]{2,60}?)\s*·\s*(.+)$/);
-    if (companyLocationMatch) {
-      const company = cleanToken(companyLocationMatch[1]);
-      if (isLikelyRole(line) && isLikelyCompany(company)) {
-        allJobs.push({ role: cleanToken(line), company });
-        continue;
-      }
-    }
-
-    // Company and location on separate lines
-    if (isLikelyRole(line) && isLikelyCompany(nextLine)) {
-      const afterCompany = lines[i + 2] || "";
-      if (isLikelyLocation(afterCompany) || /\d+ (day|hour|week|month)s? ago/i.test(afterCompany)) {
-        allJobs.push({ role: cleanToken(line), company: cleanToken(nextLine) });
-      }
-    }
-  }
-  if (allJobs.length > 0) return allJobs;
 
   // Strategy 4: Labeled fields
   const positionMatch = text.match(/(?:position|job title|role)[:\s]+([^\n]{3,80})/i);
