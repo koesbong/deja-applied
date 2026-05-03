@@ -63,7 +63,19 @@
 }
 .da-results-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .da-result-item { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; border: 1px solid #e0e0e0; }
-.da-result-subject { font-weight: 500; font-size: 12.5px; color: #1f1f1f; line-height: 1.4; margin-bottom: 4px; }
+.da-result-subject {
+  font-weight: 500;
+  font-size: 12.5px;
+  color: #1f1f1f;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  text-decoration: none;
+  display: block;
+}
+.da-result-subject:hover {
+  color: #0a66c2;
+  text-decoration: underline;
+}
 .da-result-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: #5f6368; margin-bottom: 4px; }
 .da-result-from { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .da-result-date { flex-shrink: 0; }
