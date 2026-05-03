@@ -27,7 +27,6 @@ function detectAndCheck() {
   const parsed = parseLinkedInJobEmail(emailText);
   if (!parsed) { removeOverlay(); lastCheckedMessageId = messageId; return; }
 
-  // Normalise to array — parser returns object (subject match) or array (digest)
   const jobs = Array.isArray(parsed) ? parsed : [parsed];
 
   lastCheckedMessageId = messageId;
@@ -68,6 +67,9 @@ function extractEmailText(container) {
 
 // ── LinkedIn Email Parser ─────────────────────────────────────────────────────
 
+// Subject patterns that indicate a digest/alert — never use subject as role+company source
+const DIGEST_SUBJECT_RE = /^(jobs similar to|your job alert|new jobs|jobs for you|recommended jobs|new job match|jobs in |top jobs)/i;
+
 function parseLinkedInJobEmail(text) {
   if (!text || text.length < 20) return null;
 
@@ -87,7 +89,10 @@ function parseLinkedInJobEmail(text) {
 
   if (!isLinkedIn && !isLinkedInSender && !isLinkedInSubject) return null;
 
-  // Strategy 1: Digest/list emails — parse ALL visible jobs first
+  const isDigestSubject = DIGEST_SUBJECT_RE.test(subject.trim());
+
+  // Strategy 1: Body digest — parse ALL visible job cards first.
+  // Always run this for digest emails; also run for single-job emails in case body has better data.
   const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
   const allJobs = [];
 
@@ -97,7 +102,7 @@ function parseLinkedInJobEmail(text) {
 
     if (!isLikelyRole(line)) continue;
 
-    // Format: "Company · Location"
+    // Format: "Company · Location" on next line
     const companyLocationMatch = nextLine.match(/^([A-Z][^·\n]{2,80}?)\s*·\s*(.+)$/);
     if (companyLocationMatch) {
       const company = cleanToken(companyLocationMatch[1]);
@@ -107,7 +112,7 @@ function parseLinkedInJobEmail(text) {
       }
     }
 
-    // Format: role / company / location on separate lines
+    // Format: company and location on separate lines
     if (isLikelyCompany(nextLine)) {
       const afterCompany = lines[i + 2] || "";
       if (isLikelyLocation(afterCompany) || /\d+ (day|hour|week|month)s? ago/i.test(afterCompany)) {
@@ -118,6 +123,7 @@ function parseLinkedInJobEmail(text) {
   }
 
   if (allJobs.length > 0) {
+    // Deduplicate
     const seen = new Set();
     return allJobs.filter(job => {
       const key = `${job.role}__${job.company}`.toLowerCase();
@@ -127,25 +133,27 @@ function parseLinkedInJobEmail(text) {
     });
   }
 
-  // Strategy 2: "Role at Company" in body
-  let match = text.match(/^(.{2,80}?)\s+at\s+([A-Z][^\n]{2,60}?)(?:\s*[\n\r·•|,]|$)/m);
-  if (match) {
-    const role = cleanToken(match[1]);
-    const company = cleanToken(match[2]);
-    if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
+  // Strategy 2: Subject line — ONLY for single-job subjects, never for digest/alert subjects
+  if (!isDigestSubject) {
+    for (const pat of [
+      /^(.{2,80}?)\s+at\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/,
+      /^(.{2,80}?)\s+@\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/
+    ]) {
+      const m = subject.match(pat);
+      if (m) {
+        const role = cleanToken(m[1]);
+        const company = cleanToken(m[2]);
+        if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
+      }
+    }
   }
 
-  // Strategy 3: Subject line fallback only
-  for (const pat of [
-    /^(.{2,80}?)\s+at\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/,
-    /^(.{2,80}?)\s+@\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/
-  ]) {
-    const m = subject.match(pat);
-    if (m) {
-      const role = cleanToken(m[1]);
-      const company = cleanToken(m[2]);
-      if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
-    }
+  // Strategy 3: "Role at Company" anywhere in body
+  const bodyMatch = text.match(/^(.{2,80}?)\s+at\s+([A-Z][^\n]{2,60}?)(?:\s*[\n\r·•|,]|$)/m);
+  if (bodyMatch) {
+    const role = cleanToken(bodyMatch[1]);
+    const company = cleanToken(bodyMatch[2]);
+    if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
   }
 
   // Strategy 4: Labeled fields
@@ -154,10 +162,6 @@ function parseLinkedInJobEmail(text) {
   if (positionMatch && companyMatch) {
     return { role: cleanToken(positionMatch[1]), company: cleanToken(companyMatch[1]) };
   }
-
-  // Strategy 5: "Hiring: Role at Company"
-  match = text.match(/(?:hiring|looking for|open role)[:\s]+(.{3,80}?)\s+at\s+([A-Z][^\n]{2,60})/i);
-  if (match) return { role: cleanToken(match[1]), company: cleanToken(match[2]) };
 
   return null;
 }
@@ -179,7 +183,7 @@ const ROLE_KEYWORDS = [
 
 function isLikelyRole(str) {
   if (!str || str.length < 3 || str.length > 100) return false;
-  if (/^(your job alert|new jobs|jobs in|new job match|match your)/i.test(str)) return false;
+  if (/^(your job alert|new jobs|jobs in|new job match|match your|jobs similar|jobs for you)/i.test(str)) return false;
   const lower = str.toLowerCase();
   return ROLE_KEYWORDS.some(k => lower.includes(k)) || /^[A-Z][a-z]/.test(str);
 }
@@ -188,7 +192,7 @@ function isLikelyCompany(str) {
   if (!str || str.length < 2 || str.length > 80) return false;
   if (/^https?:\/\//.test(str)) return false;
   if (/^\d/.test(str)) return false;
-  if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy|new jobs|your job|jobs in|match your|new job)/i.test(str)) return false;
+  if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy|new jobs|your job|jobs in|match your|new job|jobs similar|jobs for)/i.test(str)) return false;
   return /^[A-Z]/.test(str);
 }
 
@@ -281,7 +285,6 @@ function removeOverlay() {
 function triggerBackgroundCheckAll(jobs) {
   if (!jobs.length) return;
 
-  // Use first job to verify auth, then check all in parallel
   chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company: jobs[0].company, role: jobs[0].role }, (firstResp) => {
     if (chrome.runtime.lastError) { showMultiResultsOverlay(jobs, [], "Extension error. Try reloading Gmail."); return; }
     if (!firstResp?.success) { showMultiResultsOverlay(jobs, [], firstResp?.error || "Unknown error"); return; }
