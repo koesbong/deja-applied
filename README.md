@@ -44,7 +44,13 @@ A Chrome extension that detects when you open a LinkedIn job listing email in Gm
 3. Copy your **Extension ID** shown on the card
 4. Go back to Google Cloud → edit your OAuth credential → set **Item ID** to your Extension ID → Save
 
-### Step 6 — Sign In
+### Step 6 — Add Your Email as a Test User
+1. Go back to [console.cloud.google.com](https://console.cloud.google.com),
+2. Go to **Audience**
+3. Find the **Test Users** section
+4. Click the **+ Add User** button and add your email
+
+### Step 7 — Sign In
 Click the Déjà Applied icon in Chrome → **Sign in with Google** → grant Gmail read access.
 If prompted about an "unverified app", click **Advanced → Go to app** (safe for your own app).
 
