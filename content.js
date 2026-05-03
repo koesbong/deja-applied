@@ -27,9 +27,12 @@ function detectAndCheck() {
   const parsed = parseLinkedInJobEmail(emailText);
   if (!parsed) { removeOverlay(); lastCheckedMessageId = messageId; return; }
 
+  // Normalise to array — parser returns object (subject match) or array (digest)
+  const jobs = Array.isArray(parsed) ? parsed : [parsed];
+
   lastCheckedMessageId = messageId;
-  showLoadingOverlay(parsed.company, parsed.role);
-  triggerBackgroundCheck(parsed.company, parsed.role);
+  showLoadingOverlay(jobs);
+  triggerBackgroundCheckAll(jobs);
 }
 
 function findOpenEmail() {
@@ -68,6 +71,7 @@ function extractEmailText(container) {
 function parseLinkedInJobEmail(text) {
   if (!text || text.length < 20) return null;
 
+  // Check if this looks like a LinkedIn email
   const isLinkedIn = /linkedin/i.test(text.substring(0, 800));
   const fromEl = document.querySelector('.gD, [email*="linkedin"]');
   const fromEmail = fromEl?.getAttribute("email") || fromEl?.innerText || "";
@@ -91,10 +95,11 @@ function parseLinkedInJobEmail(text) {
     if (isLikelyRole(role) && isLikelyCompany(company)) return { role, company };
   }
 
-  // Strategy 2: Subject line
+  // Strategy 2: Subject line — works with or without a trailing separator
+  // e.g. "Head of Engineering at Treatwell" (no dash) or "SWE at Acme – LinkedIn"
   for (const pat of [
-    /^(.{2,80}?)\s+at\s+([A-Z][^\-–—·]{2,60}?)(?:\s*[-–—·])/,
-    /^(.{2,80}?)\s+@\s+([A-Z][^\-–—·]{2,60}?)(?:\s*[-–—·])/
+    /^(.{2,80}?)\s+at\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/,
+    /^(.{2,80}?)\s+@\s+([A-Z][^\-–—·\n]{2,60}?)(?:\s*[-–—·\n]|$)/
   ]) {
     const m = subject.match(pat);
     if (m) {
@@ -104,19 +109,34 @@ function parseLinkedInJobEmail(text) {
     }
   }
 
-  // Strategy 3: Consecutive role+company lines (digest card format)
+  // Strategy 3: Digest card format — handles both:
+  //   "Role\nCompany\nLocation"       (company and location on separate lines)
+  //   "Role\nCompany · Location ..."  (company and location joined with ·)
   const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+  const allJobs = [];
   for (let i = 0; i < lines.length - 1; i++) {
     const line = lines[i];
     const nextLine = lines[i + 1];
+
+    // "Company · Location" joined on one line
+    const companyLocationMatch = nextLine.match(/^([A-Z][^·\n]{2,60}?)\s*·\s*(.+)$/);
+    if (companyLocationMatch) {
+      const company = cleanToken(companyLocationMatch[1]);
+      if (isLikelyRole(line) && isLikelyCompany(company)) {
+        allJobs.push({ role: cleanToken(line), company });
+        continue;
+      }
+    }
+
+    // Company and location on separate lines
     if (isLikelyRole(line) && isLikelyCompany(nextLine)) {
       const afterCompany = lines[i + 2] || "";
       if (isLikelyLocation(afterCompany) || /\d+ (day|hour|week|month)s? ago/i.test(afterCompany)) {
-        return { role: cleanToken(line), company: cleanToken(nextLine) };
+        allJobs.push({ role: cleanToken(line), company: cleanToken(nextLine) });
       }
-      return { role: cleanToken(line), company: cleanToken(nextLine) };
     }
   }
+  if (allJobs.length > 0) return allJobs;
 
   // Strategy 4: Labeled fields
   const positionMatch = text.match(/(?:position|job title|role)[:\s]+([^\n]{3,80})/i);
@@ -157,19 +177,20 @@ function isLikelyCompany(str) {
   if (!str || str.length < 2 || str.length > 80) return false;
   if (/^https?:\/\//.test(str)) return false;
   if (/^\d/.test(str)) return false;
-  if (/^(view|apply|click|see|check|update|unsubscribe|follow)/i.test(str)) return false;
+  if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy)/i.test(str)) return false;
   return /^[A-Z]/.test(str);
 }
 
 function isLikelyLocation(str) {
-  return /\b(remote|hybrid|on.?site|new york|san francisco|london|berlin|paris|madrid|barcelona|valencia|amsterdam|toronto|sydney|singapore|bangalore|india|usa|uk|canada|australia|spain|france|germany)\b/i.test(str) ||
+  return /\b(remote|hybrid|on.?site|new york|san francisco|london|berlin|paris|madrid|barcelona|valencia|amsterdam|toronto|sydney|singapore|bangalore|india|usa|uk|canada|australia|spain|france|germany|finland|espoo|helsinki|emea)\b/i.test(str) ||
     /,\s*[A-Z]{2}$/.test(str);
 }
 
 // ── Overlay ───────────────────────────────────────────────────────────────────
 
-function showLoadingOverlay(company, role) {
+function showLoadingOverlay(jobs) {
   removeOverlay();
+  const count = jobs.length;
   const overlay = document.createElement("div");
   overlay.id = OVERLAY_ID;
   overlay.innerHTML = `
@@ -177,7 +198,7 @@ function showLoadingOverlay(company, role) {
       <span class="da-icon">🔍</span>
       <div class="da-title-group">
         <span class="da-title">Déjà Applied</span>
-        <span class="da-meta">${escHtml(company)}${role ? ` · ${escHtml(role)}` : ""}</span>
+        <span class="da-meta">Checking ${count} job${count > 1 ? "s" : ""}…</span>
       </div>
       <button class="da-close" title="Close">✕</button>
     </div>
@@ -192,7 +213,7 @@ function showLoadingOverlay(company, role) {
   document.body.appendChild(overlay);
 }
 
-function showResultsOverlay(company, role, results, error) {
+function showMultiResultsOverlay(jobs, hits, error) {
   const overlay = document.getElementById(OVERLAY_ID);
   if (!overlay) return;
 
@@ -205,16 +226,15 @@ function showResultsOverlay(company, role, results, error) {
       </div>`;
   } else if (error) {
     bodyHtml = `<div class="da-error">⚠️ ${escHtml(error)}</div>`;
-  } else if (!results || results.length === 0) {
+  } else if (hits.length === 0) {
     bodyHtml = `
       <div class="da-no-results">
         <span class="da-check-icon">✅</span>
-        <span>No prior application emails found for <strong>${escHtml(company)}</strong>.</span>
+        <span>No prior applications found across ${jobs.length} job${jobs.length > 1 ? "s" : ""} in this email.</span>
       </div>`;
   } else {
-    const count = results.length;
-    bodyHtml = `
-      <div class="da-found-badge">⚠️ Found ${count} prior application email${count > 1 ? "s" : ""}</div>
+    bodyHtml = hits.map(({ job, results }) => `
+      <div class="da-found-badge">⚠️ ${escHtml(job.role)} at ${escHtml(job.company)}</div>
       <ul class="da-results-list">
         ${results.map(r => `
           <li class="da-result-item">
@@ -225,7 +245,7 @@ function showResultsOverlay(company, role, results, error) {
             </div>
             ${r.snippet ? `<div class="da-result-snippet">${escHtml(truncate(r.snippet, 120))}</div>` : ""}
           </li>`).join("")}
-      </ul>`;
+      </ul>`).join("");
   }
 
   overlay.querySelector(".da-body").innerHTML = bodyHtml;
@@ -234,8 +254,8 @@ function showResultsOverlay(company, role, results, error) {
   if (signInBtn) {
     signInBtn.onclick = () => {
       chrome.runtime.sendMessage({ type: "SIGN_IN" }, (resp) => {
-        if (resp?.success) { showLoadingOverlay(company, role); triggerBackgroundCheck(company, role); }
-        else showResultsOverlay(company, role, null, "Sign-in failed. Please try again.");
+        if (resp?.success) { showLoadingOverlay(jobs); triggerBackgroundCheckAll(jobs); }
+        else showMultiResultsOverlay(jobs, [], "Sign-in failed. Please try again.");
       });
     };
   }
@@ -247,22 +267,8 @@ function removeOverlay() {
 
 // ── Background Communication ──────────────────────────────────────────────────
 
-function triggerBackgroundCheck(company, role) {
-  chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company, role }, (response) => {
-    if (chrome.runtime.lastError) {
-      showResultsOverlay(company, role, null, "Extension error. Try reloading Gmail.");
-      return;
-    }
-    if (!response?.success) { showResultsOverlay(company, role, null, response?.error || "Unknown error"); return; }
-    if (response.needsAuth) { showResultsOverlay(company, role, null, "needsAuth"); return; }
-    showResultsOverlay(company, role, response.results, null);
-  });
-}
+function triggerBackgroundCheckAll(jobs) {
+  if (!jobs.length) return;
 
-function escHtml(str) {
-  return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-function truncate(str, max) {
-  if (!str || str.length <= max) return str;
-  return str.substring(0, max) + "…";
-}
+  // Use first job to verify auth, then check all in parallel
+  chrome.runtime.sendMessage({ type: "CHECK_APPLICATION", company: jobs[0].company, role: jobs[0].role },
