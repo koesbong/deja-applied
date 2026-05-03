@@ -186,7 +186,7 @@ function isLikelyRole(str) {
   if (/[·]/.test(str)) return false;
   if (/^(your job alert|new jobs|jobs in|new job match|match your|jobs similar|jobs for you)/i.test(str)) return false;
   const lower = str.toLowerCase();
-  return ROLE_KEYWORDS.some(k => lower.includes(k)) || /^[A-Z][a-z]/.test(str);
+  return ROLE_KEYWORDS.some(k => lower.includes(k));
 }
 
 function isLikelyCompany(str) {
