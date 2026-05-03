@@ -37,20 +37,21 @@ async function searchApplicationEmails(company, role, token) {
   const companyClean = company.replace(/[^a-zA-Z0-9 ]/g, "").trim();
   const roleClean = role ? role.replace(/[^a-zA-Z0-9 ]/g, "").trim() : "";
 
-  const queries = [];
-  if (companyClean) {
+  if (!companyClean) return [];
+
+  // Every query MUST include the company name — no role-only fallbacks
+  const queries = [
+    // Subject contains company + application keyword
+    `subject:("${companyClean}") subject:(application OR applied OR applying OR "thank you" OR "thanks for" OR "we received" OR "your application")`,
+    // Body contains company + ack phrase (catches "Thanks for applying to Treatwell" from Workable etc.)
+    `("${companyClean}") ("thank you for applying" OR "thanks for applying" OR "application received" OR "we received your application" OR "successfully applied" OR "your application has been" OR "application submitted" OR "you applied")`,
+  ];
+
+  // If we also have a role, add a tighter subject:company + subject:role query
+  if (roleClean) {
     queries.push(
-      `subject:("${companyClean}") subject:(application OR applied OR applying OR "thank you" OR "thanks for" OR "we received" OR "you applied" OR "your application")`
+      `subject:("${companyClean}") subject:("${roleClean.substring(0, 40)}")`
     );
-    queries.push(
-      `("${companyClean}") ("thank you for applying" OR "thanks for applying" OR "application received" OR "we received your application" OR "successfully applied" OR "your application has been" OR "application submitted" OR "you applied" OR "we got your application")`
-    );
-    if (roleClean) {
-      queries.push(
-        `subject:("${companyClean}") subject:("${roleClean.substring(0, 40)}")`
-      );
-    }
-    queries.push(`subject:("${companyClean}") (applying OR application OR applied)`);
   }
 
   const allResults = [];
