@@ -32,7 +32,7 @@ A Chrome extension that detects when you open a LinkedIn job listing email in Gm
 3. Copy the **Client ID** (looks like `xxxx.apps.googleusercontent.com`)
 
 ### Step 4 — Add Your Client ID
-1. Make a copy of `manifest.json.template' and name it `manifest.json`
+1. Make a copy of `manifest.json.template` and name it `manifest.json`
 2. Open `manifest.json` and replace `YOUR_GOOGLE_CLIENT_ID`:
 ```json
 "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
