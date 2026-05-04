@@ -177,13 +177,12 @@ const ROLE_KEYWORDS = [
   "lead","director","coordinator","specialist","consultant","officer","associate",
   "intern","head of","VP","president","product","marketing","sales","operations",
   "finance","data","software","frontend","backend","fullstack","full-stack",
-  "mobile","ios","android","devops","sre","qa","security","cloud","platform",
-  "infrastructure","research","growth","recruiter"
+  "mobile","ios","android","devops","sre","qa","security","cloud",  "infrastructure","research","growth","recruiter","platform engineer","platform lead"
 ];
 
 function isLikelyRole(str) {
   if (!str || str.length < 3 || str.length > 100) return false;
-  if (/[·]/.test(str)) return false;
+  if (/[·]/.test(str)) return false; // · only appears in "Company · Location" lines, never roles
   if (/^(your job alert|new jobs|jobs in|new job match|match your|jobs similar|jobs for you)/i.test(str)) return false;
   const lower = str.toLowerCase();
   return ROLE_KEYWORDS.some(k => lower.includes(k));
@@ -194,7 +193,7 @@ function isLikelyCompany(str) {
   if (/^https?:\/\//.test(str)) return false;
   if (/^\d/.test(str)) return false;
   if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy|new jobs|your job|jobs in|match your|new job|jobs similar|jobs for)/i.test(str)) return false;
-  return /^[A-Z]/.test(str);
+  return /^[A-Z]/.test(str) || /^[a-z][a-zA-Z0-9]+$/.test(str);
 }
 
 function isLikelyLocation(str) {

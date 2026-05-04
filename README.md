@@ -66,20 +66,7 @@ If prompted about an "unverified app", click **Advanced → Go to app** (safe fo
 | `overlay.css` | Styles for the bottom-right results panel |
 | `popup.html/js` | Toolbar popup: sign in/out and status |
 | `icons/` | 16/48/128px icons |
-
----
-
-## Email Parser
-
-The parser in `content.js` tries five strategies in order to extract company and role:
-
-| # | Strategy | Example |
-|---|---|---|
-| 1 | `"Role at Company"` in email body | `Software Engineer at Acme Corp` |
-| 2 | Subject line parsing | `SWE at Acme Corp – LinkedIn Job Alert` |
-| 3 | Consecutive role + company lines | LinkedIn digest card format |
-| 4 | Labeled fields | `Position: SWE / Company: Acme` |
-| 5 | Contextual phrases | `Hiring: SWE at Acme` |
+| `tests/` | Unit tests for the email parser (see [CONTRIBUTING.md](./CONTRIBUTING.md)) |
 
 ---
 
@@ -95,20 +82,6 @@ Only email **metadata** is fetched (Subject, From, Date, snippet) — no full em
 
 ---
 
-## Publishing Publicly
-
-1. **OAuth Verification** — submit via the OAuth consent screen; provide a privacy policy URL and a short video demo; expect 1–4 weeks for Google review
-2. **Privacy Policy** — state that only Gmail metadata is read locally and nothing is stored or shared
-3. **Chrome Web Store** — $5 one-time developer account; upload as `.zip` with 1280×800 screenshots
-4. **Tighten CSP** — add to `manifest.json` for the public release:
-   ```json
-   "content_security_policy": {
-     "extension_pages": "script-src 'self'; object-src 'self'"
-   }
-   ```
-
----
-
 ## Privacy
 
 - Reads only email **metadata** (Subject, From, Date, snippet) — never full bodies
@@ -120,6 +93,6 @@ Only email **metadata** is fetched (Subject, From, Date, snippet) — no full em
 
 ## Contributing
 
-To contribute, you'll need to set up your own Google Cloud project and OAuth Client ID (see Setup above). The `client_id` field in `manifest.json` is intentionally left as a placeholder — do not commit your real Client ID to a public fork.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, how to run tests, and how to submit changes.
 
 MIT License
