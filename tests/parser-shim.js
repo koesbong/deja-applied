@@ -46,7 +46,7 @@ function parseLinkedInJobEmail(text) {
   const isDigestSubject = DIGEST_SUBJECT_RE.test(subject.trim());
 
   // Strategy 1: body digest
-  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+  const lines = text.split(/[\n\r\t]+/).map(l => l.trim()).filter(Boolean);
   const allJobs = [];
 
   for (let i = 0; i < lines.length - 1; i++) {

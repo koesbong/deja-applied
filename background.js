@@ -45,6 +45,8 @@ async function searchApplicationEmails(company, role, token) {
     `subject:("${companyClean}") subject:(application OR applied OR applying OR "thank you" OR "thanks for" OR "we received" OR "your application") -subject:"Chat with"`,
     // Body contains company + ack phrase (catches "Thanks for applying to Treatwell" from Workable etc.)
     `("${companyClean}") ("thank you for applying" OR "thanks for applying" OR "application received" OR "we received your application" OR "successfully applied" OR "your application has been" OR "application submitted" OR "you applied") -subject:"Chat with"`,
+    `from:(${company}) ("application received" OR "thank you for applying" OR "we received your application")`,
+  `subject:("application" OR "applied") "${company}" -from:glassdoor.com -from:linkedin.com -from:indeed.com`,
   ];
 
   // If we also have a role, add a tighter subject:company + subject:role query

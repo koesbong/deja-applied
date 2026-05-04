@@ -56,13 +56,23 @@ function getMessageId(container) {
 }
 
 function extractEmailText(container) {
-  const bodyEl =
-    container.closest?.(".a3s") ||
-    container.querySelector?.(".a3s") ||
-    container.querySelector?.(".ii.gt") ||
-    container;
-  if (!bodyEl) return null;
-  return bodyEl.innerText || bodyEl.textContent || "";
+  // Try selectors from most specific to least specific
+  const selectors = [
+    '.a3s.aiL',           // primary Gmail message body
+    '.a3s',               // any Gmail message body
+    '.ii.gt .a3s',        // threaded message body
+    '[data-message-id] .a3s',
+  ];
+
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el && el.innerText && el.innerText.trim().length > 100) {
+      return el.innerText;
+    }
+  }
+
+  // Last resort — use the passed container directly
+  return container.innerText || container.textContent || "";
 }
 
 // ── LinkedIn Email Parser ─────────────────────────────────────────────────────
@@ -93,7 +103,7 @@ function parseLinkedInJobEmail(text) {
 
   // Strategy 1: Body digest — parse ALL visible job cards first.
   // Always run this for digest emails; also run for single-job emails in case body has better data.
-  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(Boolean);
+  const lines = text.split(/[\n\r\t]+/).map(l => l.trim()).filter(Boolean);
   const allJobs = [];
 
   for (let i = 0; i < lines.length - 1; i++) {
@@ -103,7 +113,7 @@ function parseLinkedInJobEmail(text) {
     if (!isLikelyRole(line)) continue;
 
     // Format: "Company · Location" on next line
-    const companyLocationMatch = nextLine.match(/^([A-Z][^·\n]{2,80}?)\s*·\s*(.+)$/);
+    const companyLocationMatch = nextLine.match(/^([A-Za-z][^·\n]{1,80}?)\s*·\s*(.+)$/);
     if (companyLocationMatch) {
       const company = cleanToken(companyLocationMatch[1]);
       if (isLikelyCompany(company)) {
@@ -193,7 +203,7 @@ function isLikelyCompany(str) {
   if (/^https?:\/\//.test(str)) return false;
   if (/^\d/.test(str)) return false;
   if (/^(view|apply|click|see|check|update|unsubscribe|follow|actively|easy|new jobs|your job|jobs in|match your|new job|jobs similar|jobs for)/i.test(str)) return false;
-  return /^[A-Z]/.test(str) || /^[a-z][a-zA-Z0-9]+$/.test(str);
+  return /^[A-Za-z][A-Za-z0-9\s\.\-&']+$/.test(str);
 }
 
 function isLikelyLocation(str) {
