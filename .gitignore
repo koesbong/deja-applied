@@ -1,3 +1,5 @@
 .DS_STORE
 manifest.json
 package-lock.json
+coverage/
+node_modules/
